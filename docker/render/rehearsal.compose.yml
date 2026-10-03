@@ -15,6 +15,8 @@ services:
   app:
     build: { context: ../.., dockerfile: Dockerfile.render }
     mem_limit: 512m
+    cap_drop: [ALL]            # Render's sandbox grants no extra Linux capabilities
+    security_opt: ["no-new-privileges:true"]
     depends_on: { db: { condition: service_healthy } }
     ports: ["8090:10000"]
     environment:

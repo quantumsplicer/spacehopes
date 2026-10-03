@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends bash postgresql
  && rm -rf /var/lib/apt/lists/*
 COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=caddy:2-alpine /usr/bin/caddy /usr/local/bin/caddy
+# The official binary carries a file capability (bind to ports below 1024). Render's sandbox refuses to run it ("Operation not permitted").
+# We listen on port 10000, so re-create the file without that extended attribute.
+RUN cat /usr/local/bin/caddy > /tmp/caddy && install -m 755 /tmp/caddy /usr/local/bin/caddy && rm /tmp/caddy
 
 WORKDIR /srv/api
 COPY api/requirements.txt .

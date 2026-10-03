@@ -30,7 +30,7 @@ COPY --from=web /app/public /srv/web/public
 COPY docker/render/Caddyfile /etc/caddy/Caddyfile
 COPY docker/render/start.sh /usr/local/bin/start.sh
 # Git on Windows does not keep the executable bit, so set it here and also start the script through bash
-RUN chmod 755 /usr/local/bin/start.sh && sed -i 's/$//' /usr/local/bin/start.sh
+RUN chmod 755 /usr/local/bin/start.sh
 
 RUN useradd -m app && chown -R app /srv && mkdir -p /home/app/.config /home/app/.local && chown -R app /home/app
 USER app

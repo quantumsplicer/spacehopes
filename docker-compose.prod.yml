@@ -1,0 +1,56 @@
+# Production overlay. Use it with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# (or `make prod`). No dev S3 server and no Mailpit (leave COMPOSE_PROFILES empty in .env): media goes to
+# Cloudflare R2 and mail to Resend. Only Caddy is reachable from the internet (ports 80 and 443).
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "10" }
+
+services:
+  db:
+    restart: unless-stopped
+    logging: *logging
+    # the database is never published to the host
+  api:
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      ENV: prod
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 40s
+  web:
+    restart: unless-stopped
+    logging: *logging
+    build:
+      args:
+        NEXT_PUBLIC_DEV_TOOLS: "0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/robots.txt"]
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 30s
+  caddy:
+    restart: unless-stopped
+    logging: *logging
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes: !override
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    depends_on:
+      web: {condition: service_healthy}
+      api: {condition: service_healthy}
+
+volumes:
+  caddydata:
+  caddyconfig:

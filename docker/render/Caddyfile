@@ -1,0 +1,30 @@
+# Inside the single Render container: one public port ($PORT, set by Render; TLS is handled by Render),
+# routing /api/* to the API and everything else to the Next.js server. Both listen on loopback only.
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:10000} {
+	encode zstd gzip
+
+	# API docs exist only in development
+	@apidocs path /api/docs* /api/openapi.json /api/redoc*
+	respond @apidocs 404
+
+	request_body /api/* {
+		max_size 40MB
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000 {
+			transport http {
+				response_header_timeout 120s
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

@@ -1,0 +1,27 @@
+import httpx, json
+c = httpx.Client(base_url="http://localhost:8000/api/v1", headers={"user-agent":"Mozilla/5.0 test"})
+r = c.get("/feed"); d = r.json(); print("feed", r.status_code, d["total"], [ (i["type"], (i["title"] or i["text"])[:25], i["likes"], i["comment_count"], bool(i["thumb"])) for i in d["items"]][:4], d["next_cursor"] is not None)
+r = c.get("/feed", params={"cursor": d["next_cursor"]}); print("page2", len(r.json()["items"]))
+print("search", [i["id"] for i in c.get("/feed", params={"q":"drawing"}).json()["items"]])
+print("topics", c.get("/topics").json()[:2]); print("archive", c.get("/archive").json())
+slug = [i for i in d["items"] if i["type"]=="blog"][0]["slug"]
+p = c.get(f"/posts/{slug}").json(); print("post", p["title"], len(p["body"]["content"]), list(p["media"].keys()))
+print("related", [x["title"] for x in c.get(f"/posts/{p['id']}/related").json()["blogs"]])
+t = c.get("/thoughts/latest").json(); print("latest", t["id"], t["text"][:30]); 
+print("thought", c.get(f"/thoughts/{t['id']}").json()["prev"])
+print("random", c.get("/thoughts/random").status_code)
+h = {"x-anon-id":"abcdefgh12345678"}
+print("react", c.post(f"/posts/{p['id']}/reactions", json={"kind":"agree"}, headers=h).json())
+print("react2", c.post(f"/posts/{p['id']}/reactions", json={"kind":"agree"}, headers=h).json())
+print("comments", c.get(f"/posts/{p['id']}/comments").json()["total"])
+r = c.post(f"/posts/{p['id']}/comments", json={"name":"Tester","body":"Hello <b>there</b>"}); print("post comment", r.status_code, r.json())
+r = c.post(f"/posts/{p['id']}/comments", json={"name":"Bot","body":"x","website":"spam"}); print("honeypot", r.status_code)
+r = c.post(f"/posts/{p['id']}/comments", json={"name":"","body":"no name"}); print("noname", r.status_code)
+print("subscribe", c.post("/subscribe", json={"email":"a@example.com"}).status_code)
+print("contact", c.post("/contact", json={"name":"A","email":"a@example.com","topic":"Media","message":"hello there","consent":True}).status_code)
+print("visit", c.post("/track/visit").status_code, "bot", httpx.post("http://localhost:8000/api/v1/track/visit", headers={"user-agent":"Googlebot"}).status_code)
+print("read", c.post("/track/read", json={"post_id":p["id"]}).status_code)
+print("settings", c.get("/settings/public").json())
+m = list(p["media"].values())[0]; r = c.get(f"/media/{m['key']}/640.webp"); print("media", r.status_code, r.headers["content-type"], len(r.content))
+d = [v for v in p["media"].values() if v["kind"]=="drawing"][0]; r = c.get(f"/media/{d['key']}/drawing.svg"); print("svg", r.status_code, r.text[:80])
+print("studio unauth", c.get("/studio/posts").status_code, c.get("/studio/auth/me").json())

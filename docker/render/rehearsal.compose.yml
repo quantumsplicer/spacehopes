@@ -1,0 +1,35 @@
+# LOCAL REHEARSAL: runs the single Render image against a throwaway Postgres + S3 + mail catcher, limited to 512 MB
+# of memory like Render's free plan.   make render-rehearsal      then open http://localhost:8090
+name: tu-render
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: t, POSTGRES_PASSWORD: t, POSTGRES_DB: t }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U t"], interval: 3s, retries: 20 }
+  s3:
+    image: zenko/cloudserver:latest
+    environment: { SCALITY_ACCESS_KEY_ID: ak, SCALITY_SECRET_ACCESS_KEY: sk, REMOTE_MANAGEMENT_DISABLE: "1", ENDPOINT: s3, S3BACKEND: file }
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["127.0.0.1:8026:8025"]
+  app:
+    build: { context: ../.., dockerfile: Dockerfile.render }
+    mem_limit: 512m
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["8090:10000"]
+    environment:
+      ENV: ${TEST_ENV:-dev}
+      PUBLIC_URL: http://localhost:8090
+      DATABASE_URL: postgresql://t:t@db:5432/t?sslmode=disable
+      SECRET_KEY: rehearsal-secret-0123456789-0123456789
+      IP_SALT: rehearsal-salt-0123456789
+      BACKUP_PASSPHRASE: rehearsal-backup
+      S3_ENDPOINT: http://s3:8000
+      S3_ACCESS_KEY: ak
+      S3_SECRET_KEY: sk
+      S3_BUCKET: media
+      S3_BACKUP_BUCKET: backups
+      OWNER_EMAIL: owner@example.com
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      CLIENT_IP_HEADER: CF-Connecting-IP

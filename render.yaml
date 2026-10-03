@@ -1,0 +1,64 @@
+# Render Blueprint: one free web service running the whole site (website + API + HTTPS router).
+# Database and file storage live on Supabase (free, no card). See docs/DEPLOY-FREE.md.
+services:
+  - type: web
+    name: space-hopes
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # ---- generated for you ----
+      - key: SECRET_KEY
+        generateValue: true
+      - key: IP_SALT
+        generateValue: true
+      - key: BACKUP_PASSPHRASE   # copy it from the Render dashboard into your password manager
+        generateValue: true
+      # ---- fixed ----
+      - key: ENV
+        value: prod
+      - key: CLIENT_IP_HEADER    # Render's network sets this; it is how we see real visitor addresses
+        value: CF-Connecting-IP
+      - key: IMAGE_AVIF
+        value: "false"
+      - key: S3_REGION
+        value: ap-south-1
+      - key: SMTP_HOST
+        value: ""
+      # ---- you fill these in on the Render dashboard (see docs/DEPLOY-FREE.md) ----
+      - key: PUBLIC_URL          # https://space-hopes.onrender.com, or your own domain later
+        sync: false
+      - key: DATABASE_URL        # Supabase "Session pooler" connection string
+        sync: false
+      - key: S3_ENDPOINT         # https://PROJECT.storage.supabase.co/storage/v1/s3
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_BUCKET           # media
+        sync: false
+      - key: S3_BACKUP_BUCKET    # backups (a second Supabase project is best)
+        sync: false
+      - key: S3_BACKUP_ENDPOINT
+        sync: false
+      - key: S3_BACKUP_ACCESS_KEY
+        sync: false
+      - key: S3_BACKUP_SECRET_KEY
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD   # temporary: replaced when you first sign in. Make it private (not the one in the docs).
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET
+        sync: false

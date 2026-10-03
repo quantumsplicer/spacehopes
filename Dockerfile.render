@@ -1,0 +1,37 @@
+# One image for the whole site, for hosts that give you a single small container (Render free plan).
+# Build context: the repository root.   docker build -f Dockerfile.render -t spacehopes .
+
+# ---- 1. build the website ----
+FROM node:22-slim AS web
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ .
+ENV NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_DEV_TOOLS=0
+RUN npm run build
+
+# ---- 2. runtime: Python for the API, plus the Node binary and Caddy ----
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update && apt-get install -y --no-install-recommends bash postgresql-client libheif1 \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=caddy:2-alpine /usr/bin/caddy /usr/local/bin/caddy
+
+WORKDIR /srv/api
+COPY api/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY api/ .
+
+COPY --from=web /app/.next/standalone /srv/web
+COPY --from=web /app/.next/static /srv/web/.next/static
+COPY --from=web /app/public /srv/web/public
+
+COPY docker/render/Caddyfile /etc/caddy/Caddyfile
+COPY docker/render/start.sh /usr/local/bin/start.sh
+
+RUN useradd -m app && chown -R app /srv && mkdir -p /home/app/.config /home/app/.local && chown -R app /home/app
+USER app
+ENV ENV=prod INTERNAL_API_URL=http://127.0.0.1:8000 PORT=10000 NEXT_PUBLIC_DEV_TOOLS=0 IMAGE_AVIF=false RATE_LIMIT_ENABLED=true
+EXPOSE 10000
+CMD ["/usr/local/bin/start.sh"]

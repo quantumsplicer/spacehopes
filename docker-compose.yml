@@ -1,0 +1,69 @@
+name: tu-site  # own project name: keeps containers/volumes/images separate from any other stack
+# Local development stack. Open http://localhost:8080 (site), /studio (Studio),
+# http://localhost:8025 (Mailpit: all outgoing email), S3 API at http://localhost:8000 is internal only.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-thoughts}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thoughts}
+      POSTGRES_DB: ${POSTGRES_DB:-thoughts}
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-thoughts}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    # S3-compatible store for local development (stands in for Cloudflare R2). The official MinIO images are no
+    # longer published on Docker Hub, so this uses Scality CloudServer, which speaks the same S3 API.
+    image: zenko/cloudserver:latest
+    environment:
+      SCALITY_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-devaccesskey}
+      SCALITY_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-devsecretkey}
+      REMOTE_MANAGEMENT_DISABLE: "1"
+      ENDPOINT: s3
+      S3BACKEND: file
+    volumes:
+      - s3data:/usr/src/app/localData
+      - s3meta:/usr/src/app/localMetadata
+    profiles: ["dev"]
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["127.0.0.1:8025:8025"]
+    profiles: ["dev"]
+
+  api:
+    build: ./api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-thoughts}:${POSTGRES_PASSWORD:-thoughts}@db:5432/${POSTGRES_DB:-thoughts}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+    depends_on:
+      db: {condition: service_healthy}
+    expose: ["8000"]
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_DEV_TOOLS: ${NEXT_PUBLIC_DEV_TOOLS:-1}
+    env_file: .env
+    environment:
+      INTERNAL_API_URL: http://api:8000
+    depends_on: [api]
+    expose: ["3000"]
+
+  caddy:
+    image: caddy:2-alpine
+    ports: ["8080:80"]
+    volumes:
+      - ./docker/caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    depends_on: [web, api]
+
+volumes:
+  dbdata:
+  s3data:
+  s3meta:

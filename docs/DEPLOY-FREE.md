@@ -57,7 +57,7 @@ It prints `OK` or `FAILED` (with what to fix) for the database, the media bucket
 
 1. Sign in to the Gmail account that should send (for example `spacehopes@gmail.com`) and open script.google.com > **New project**.
 2. Replace the code with the contents of `docs/mail-relay.gs`. Change `PASTE-THE-SECRET-HERE` to a long random secret (any 40+ random letters and digits; keep a copy). The same value goes into Render as `APPS_SCRIPT_MAIL_SECRET`.
-3. Choose the function **authorize** at the top and click **Run** once. Google asks you to approve sending email: click through (*Advanced > Go to project (unsafe)* is normal for your own script).
+3. Choose the function **authorize** at the top and click **Run** once. Google asks you to approve access to Gmail (needed so sent messages also appear in the account's **Sent** folder): click through (*Advanced > Go to project (unsafe)* is normal for your own script).
 4. **Deploy > New deployment**, type **Web app**, *Execute as:* **Me**, *Who has access:* **Anyone**, **Deploy**. Copy the **Web app URL** (it ends in `/exec`).
 5. In Render's Environment tab add:
 
@@ -68,6 +68,8 @@ It prints `OK` or `FAILED` (with what to fix) for the database, the media bucket
    | `MAIL_FROM` | `Space hopes <spacehopes@gmail.com>` (the Gmail address; it is the display name that matters) |
 
 6. Render redeploys. Then check it from your computer: `bash scripts/admin.sh test-email you@example.com` (needs `.env.remote` with the same three values). It prints SENT, or the exact reason it failed.
+
+Updating the script later: paste the new code, run **authorize** again, then **Deploy > Manage deployments > pencil > Version: New version > Deploy** (the URL stays the same).
 
 Anyone who knows the URL but not the secret cannot send anything. If the secret ever leaks, change it in the script, deploy a **new version**, and update Render.
 

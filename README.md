@@ -31,8 +31,8 @@ The sample posts, comments, subscribers and 120 days of analytics are placeholde
 | `dev` / `down` / `logs` | start, stop, follow logs |
 | `migrate` | apply database migrations (also automatic on start) |
 | `seed` | placeholder content and the owner account |
-| `test` | backend tests (44), on a throwaway database and bucket |
-| `e2e` | browser journeys (Playwright, 11), see below |
+| `test` | backend tests (95), on a throwaway database and bucket |
+| `e2e` | browser journeys (Playwright, 12), see below |
 | `backup` / `restore` | encrypted `pg_dump` + media manifest to the bucket; `make restore` replaces the current database with the newest backup (`NAME=...` for another) |
 | `audit` | `pip-audit` and `npm audit` (also in CI) |
 
@@ -63,7 +63,7 @@ Compose services: `db` (Postgres 16), `s3` (dev object store), `mailpit` (dev ma
 
 ## Tests
 
-* `make test`: sign-in (scrypt hashes, generic errors, server throttling with growing waits, session rotation, password change and revocation, default-password enforcement, CSRF, origin, idle and absolute timeouts, roles, append-only audit log), both comment modes, moderation, blocklist/duplicate/honeypot/rate limit, visitor and reader counting rules, uploads (magic bytes, SVG rejected, EXIF/GPS stripped, size cap, variants, blurhash), drawings round trip, scheduling, conflicts, search and pagination.
+* `make test`: sign-in (scrypt hashes, generic errors, server throttling with growing waits, session rotation, password change and revocation, default-password enforcement, CSRF, origin, idle and absolute timeouts, roles, append-only audit log), both comment modes, moderation, abusive-word screening (disguised spellings included), duplicate, honeypot and rate limit, visitor and reader counting rules, uploads (magic bytes, SVG rejected, EXIF/GPS stripped, size cap, variants, blurhash), drawings round trip, scheduling, conflicts, search and pagination.
 * `make e2e`: read a blog; comment with a name only; comment in signed-in mode (code read from Mailpit); subscribe (double opt-in); send a contact message; copy-block toast; search palette; the owner writes a blog with an image and a drawing, is blocked by missing alt text, publishes, moderates a comment and sees Overview numbers move; Studio phone layout.
 
 The browser tests sign in through the real login form (with a throwaway `e2e` account created by `python -m app.cli e2e-user`, dev only) and also cover the front-end lock-out countdown and changing the password in the dashboard.

@@ -45,10 +45,9 @@ async def test_comments_are_plain_text(client, make_blog):
     assert "<script" not in body and "hello" in body
 
 
-async def test_blocklist_duplicate_and_honeypot(client, make_blog):
+async def test_abusive_words_duplicate_and_honeypot(client, make_blog):
     p = await make_blog()
-    await client.put("/api/v1/studio/settings", json={"blocklist": ["Moron"]})
-    await post_comment(client, p["id"], body="you are a moron")
+    await post_comment(client, p["id"], body="you are a m0therfvcker")  # disguised on purpose: the matcher is generous
     await post_comment(client, p["id"], body="same words")
     await post_comment(client, p["id"], body="Same words")
     r = await post_comment(client, p["id"], body="gotcha", website="http://spam")

@@ -69,7 +69,7 @@ make prod-seed       # creates the owner account only, with no sample posts
 
 Open `https://your-domain.com/studio/login` and sign in with **`admin` / `admin@123`**. In production the Studio will not let you do anything else until you set your own password (Settings > Security). Then:
 
-1. Settings: site name, About quote and name, footer line, LinkedIn link, blocklist words, who can comment.
+1. Settings: site name, About quote and name, footer line, LinkedIn link, who can comment.
 2. Replace the placeholder privacy notice and comment policy (`web/app/(site)/privacy/page.tsx`, `comment-policy/page.tsx`; all text in `[brackets]`) after a legal review, then `git pull && make prod`.
 3. Write the first posts.
 

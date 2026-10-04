@@ -52,6 +52,11 @@ class Config(BaseSettings):
 
     max_upload_bytes: int = 25 * 1024 * 1024
 
+    @property
+    def mail_configured(self) -> bool:
+        """True when a real mail provider is set (or in development, where mail goes to the local Mailpit inbox)."""
+        return self.is_dev or bool(self.resend_api_key) or self.smtp_host not in ("", "mailpit")
+
     @field_validator("database_url")
     @classmethod
     def _normalise_db(cls, v: str) -> str:

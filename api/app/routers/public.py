@@ -18,7 +18,7 @@ from ..deps import DB, READER_COOKIE, OptReader, get_settings, limiter, publishe
 from ..models import (Block, Comment, CommentLike, ContactMessage, DailyStat, Media, Post, PostDailyRead,
                       PostTopic, ReaderAccount, ReaderOtp, Reaction, Subscriber, Topic, now)
 from ..serializers import cards, iso, media_map
-from ..services import content, storage
+from ..services import content, moderation, storage
 from ..services.mail import send_safe, wrap_html
 from ..services.security import anon_hash, fingerprint, hash_code, safe_eq, token
 
@@ -302,7 +302,7 @@ async def post_comment(post_id: int, body: CommentIn, request: Request, db: DB, 
     if links > 1:
         flags.append(f"{links} links")
     low = text.lower()
-    if any(re.search(rf"(?<!\w){re.escape(w.lower())}(?!\w)", low) for w in st.blocklist if w.strip()):
+    if moderation.looks_abusive(text) or moderation.looks_abusive(name):  # generous on purpose: see services/moderation.py
         flags.append("possibly abusive")
     dup = (await db.execute(select(Comment.id).where(Comment.post_id == post_id, func.lower(Comment.body) == low).limit(1))).first()
     if dup:
@@ -351,6 +351,8 @@ class SubscribeIn(BaseModel):
 async def subscribe(body: SubscribeIn, request: Request, db: DB, bg: BackgroundTasks):
     if body.website:
         return {"ok": True}
+    if not cfg.mail_configured:  # be honest rather than say "check your inbox" when nothing can be sent
+        raise HTTPException(503, "Email sign-up is not switched on yet. Please check back soon.")
     await turnstile(body.turnstile, request)
     email = body.email.lower()
     sub = (await db.execute(select(Subscriber).where(Subscriber.email == email))).scalar_one_or_none()
@@ -503,6 +505,8 @@ class OtpReq(BaseModel):
 @router.post("/reader/otp/request", status_code=202)
 @limiter.limit("5/hour")
 async def otp_request(body: OtpReq, request: Request, db: DB, bg: BackgroundTasks):
+    if not cfg.mail_configured:
+        raise HTTPException(503, "Sign-in by email code is not switched on yet.")
     await turnstile(body.turnstile, request)
     email = body.email.lower()
     code = f"{secrets.randbelow(10**6):06d}"

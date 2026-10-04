@@ -9,6 +9,7 @@ import { DrawingBlock, Divider, GalleryBlock, ImageBlock, PullQuote, SlashComman
 
 export type EditorActions = {
   pickImages: (multiple: boolean) => Promise<MediaT[]>;
+  pickDrawing: () => Promise<MediaT | null>;
   uploadFiles: (files: File[]) => Promise<MediaT[]>;
   newDrawing: () => Promise<MediaT | null>;
   editDrawing: (m: MediaT) => Promise<MediaT | null>;
@@ -41,8 +42,9 @@ export default function BlockEditor({ initial, media, actions, onChange, onReady
   const items = (q: string): SlashItem[] => {
     const all: SlashItem[] = [
       { id: "drawing", title: "Drawing", hint: "Sketch in colour, right inside the post", first: true, run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const m = await act.current.newDrawing(); if (m) editor.chain().focus().insertContent({ type: "drawing", attrs: { mediaId: m.id, alt: m.alt || "", caption: m.caption || "", wide: true } }).run(); } },
-      { id: "image", title: "Image", hint: "Upload or paste", run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const ms = await act.current.pickImages(false); if (ms[0]) editor.chain().focus().insertContent({ type: "image", attrs: { mediaId: ms[0].id } }).run(); } },
-      { id: "gallery", title: "Gallery", hint: "Several images, swipeable", run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const ms = await act.current.pickImages(true); if (ms.length) editor.chain().focus().insertContent({ type: "gallery", attrs: { items: ms.map((m) => ({ mediaId: m.id, alt: "", caption: "" })) } }).run(); } },
+      { id: "saved", title: "Saved drawing", hint: "Reuse a drawing from your library", run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const m = await act.current.pickDrawing(); if (m) editor.chain().focus().insertContent({ type: "drawing", attrs: { mediaId: m.id, alt: m.alt || "", caption: m.caption || "", wide: true } }).run(); } },
+      { id: "image", title: "Image", hint: "Upload, paste or choose from your media", run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const ms = await act.current.pickImages(false); if (ms[0]) editor.chain().focus().insertContent({ type: "image", attrs: { mediaId: ms[0].id, alt: ms[0].alt || "" } }).run(); } },
+      { id: "gallery", title: "Gallery", hint: "Several images, swipeable (upload or choose)", run: async ({ editor, range }) => { editor.chain().focus().deleteRange(range).run(); const ms = await act.current.pickImages(true); if (ms.length) editor.chain().focus().insertContent({ type: "gallery", attrs: { items: ms.map((m) => ({ mediaId: m.id, alt: "", caption: "" })) } }).run(); } },
       { id: "heading", title: "Heading", hint: "Section title", run: ({ editor, range }) => editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run() },
       { id: "quote", title: "Quote", hint: "Pull a line out", run: ({ editor, range }) => editor.chain().focus().deleteRange(range).setNode("pullQuote").run() },
       { id: "divider", title: "Divider", hint: "A pause", run: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertContent([{ type: "divider" }, { type: "paragraph" }]).run() },

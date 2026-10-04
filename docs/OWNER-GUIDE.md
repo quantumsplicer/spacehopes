@@ -22,7 +22,7 @@ On an iPad, use the Apple Pencil. Two fingers move and zoom the page; tap with t
 
 ## Comments
 
-*Studio > Comments* (the number is how many are waiting). For each one: **Approve** (shows on the site), **Reply** (posted as "Author"), **Hide** (kept, not shown), **Block** (the person cannot comment again). Comments flagged in red have several links or words from your blocklist: they never appear without you. Comments are plain text, so links are not clickable.
+*Studio > Comments* (the number is how many are waiting). For each one: **Approve** (shows on the site), **Reply** (posted as "Author"), **Hide** (kept, not shown), **Block** (the person cannot comment again). Comments flagged in red have several links, or contain abusive words (the site checks English, Hindi and Tamil spellings, including disguised ones like `f*ck`). It errs on the side of flagging, so a few harmless comments will land here too. Flagged comments never appear without you. Comments are plain text, so links are not clickable.
 
 *Settings* decides who can comment: **anyone with just a name** (default) or **signed-in readers** (they get a one-time code by email; only their name is shown). You can also turn review on or off.
 

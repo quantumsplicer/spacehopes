@@ -9,3 +9,4 @@ test-results/
 playwright-report/
 .env.remote
 .env.render
+tsconfig.tsbuildinfo

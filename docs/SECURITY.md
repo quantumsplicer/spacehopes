@@ -14,7 +14,7 @@ What stops someone who can only see the login page:
 * **Passwords** are hashed with **scrypt** (N=2^15, r=8, p=1, 16-byte random salt per password) and compared in constant time. Policy for a new password: 12 to 128 characters, at least three kinds of characters, not a common password (`admin@123`, `password...`), not containing the login ID, different from the old one.
 * **Changing the password** needs the current password (own throttle), then **revokes every session** (including the current one) and issues a fresh one, and emails the owner. The login ID can be changed in the same step.
 * Sessions: random token in an `httpOnly`, `Secure` (outside dev), `SameSite=Strict` cookie; only its SHA-256 is stored. A new session on every sign-in. **12-hour absolute** and **30-minute idle** timeouts. CSRF header on every write plus an `Origin` check (login and logout included).
-* Roles: **owner**; optional **editor** (drafts and moderation only; cannot publish, change settings, export subscribers, add users or read the audit log). The owner creates an editor with a first password; the editor must change it at first sign-in.
+* There is a single account (the owner). The code still checks roles, but no feature creates other users.
 * Every sign-in and every change is written to `audit_log`, which is **append-only** (a Postgres trigger rejects `UPDATE`, `DELETE` and `TRUNCATE`). Each sign-in also emails the owner.
 
 **Known trade-off:** because wrong guesses on a login ID slow that ID down for everyone, a determined attacker can keep the owner waiting (never more than 15 minutes at a time) but cannot get in. Cloudflare rate-limit rules in front of `/api/v1/studio/auth/*` (see `docs/DEPLOY.md`) reduce that.
@@ -26,7 +26,7 @@ On the server: `docker compose exec api python -m app.cli reset-password <login_
 ## Public input
 
 * Pydantic validation on every body, with length caps (name 60, comment 2,000, contact message 4,000). Comments are **plain text**: sanitised on input, rendered escaped, links never clickable.
-* Comment checks: rate limit 5 per 10 minutes per salted fingerprint, more than one link flags it, English/Hindi blocklist (editable), duplicate detection, hidden honeypot field, Turnstile. Flagged comments always wait for a human. Hidden comments are kept, never hard-deleted.
+* Comment checks: rate limit 5 per 10 minutes per salted fingerprint, more than one link flags it, English/Hindi built-in abusive-word screening (English, Hindi and Tamil/Tanglish; generous on purpose, see `api/app/services/moderation.py`), duplicate detection, hidden honeypot field, Turnstile. Flagged comments always wait for a human. Hidden comments are kept, never hard-deleted.
 * **No raw IPs or user agents are stored.** Blocks and rate limits use `sha256(salt | IP | user agent)`. Analytics store only daily totals.
 * Subscribe and sign-in codes give the same answer whether or not the address exists.
 

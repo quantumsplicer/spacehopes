@@ -197,17 +197,6 @@ async def test_editor_cannot_publish_or_change_settings(client):
     assert (await client.post(f"/api/v1/studio/posts/{pid}/publish")).status_code == 403
     assert (await client.put("/api/v1/studio/settings", json={"watermark": True})).status_code == 403
     assert (await client.get("/api/v1/studio/audit-log")).status_code == 403
-    assert (await client.post("/api/v1/studio/auth/editors", json={"login_id": "x1y2z3", "email": "a@b.co", "password": NEW})).status_code == 403
-
-
-async def test_owner_adds_an_editor_who_must_change_the_first_password(owner):
-    r = await owner.post("/api/v1/studio/auth/editors", json={"login_id": "newbie", "email": "newbie@example.com", "name": "N", "password": "weak"})
-    assert r.status_code == 422
-    r = await owner.post("/api/v1/studio/auth/editors", json={"login_id": "newbie", "email": "newbie@example.com", "name": "N", "password": NEW})
-    assert r.status_code == 201
-    async with SessionLocal() as db:
-        u = (await db.execute(select(User).where(User.login_id == "newbie"))).scalar_one()
-        assert u.must_change_password and u.role == "editor"
 
 
 async def test_audit_log_is_append_only_and_never_holds_typed_secrets(owner):

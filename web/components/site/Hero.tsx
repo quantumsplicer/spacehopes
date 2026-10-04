@@ -5,6 +5,7 @@ import { cfetch } from "@/lib/api";
 import type { Card } from "@/lib/types";
 import { fmtDate, plural, timeAgo } from "@/lib/format";
 import { Arrow, ArrowDown } from "@/components/Icons";
+import { toast } from "@/lib/client";
 import { Glow, RiseWords } from "./Motion";
 
 export default function Hero({ latest }: { latest: Card | null }) {
@@ -17,7 +18,13 @@ export default function Hero({ latest }: { latest: Card | null }) {
   async function surprise() {
     if (busy) return;
     setBusy(true);
-    try { const c = await cfetch<Card>(`/thoughts/random${card ? `?exclude=${card.id}` : ""}`); setCard(c); setK((x) => x + 1); } catch { /* keep current */ }
+    try {
+      const c = await cfetch<Card>(`/thoughts/random${card ? `?exclude=${card.id}` : ""}`);
+      if (card && c.id === card.id) toast("That is the only thought so far. More are on the way.");
+      else { setCard(c); setK((x) => x + 1); }
+    } catch {
+      toast("There are no thoughts to show yet. Please check back soon.");
+    }
     setBusy(false);
   }
   function start(e: React.MouseEvent) {
@@ -41,12 +48,12 @@ export default function Hero({ latest }: { latest: Card | null }) {
           <p className="intro rise" style={{ animationDelay: "560ms" }}>Short thoughts and longer essays on the things worth hoping for, written slowly. Read them, and leave your own thoughts beside them.</p>
           <div className="cta rise" style={{ animationDelay: "700ms" }}>
             <a href="#feed" onClick={start} className="btn btn-ink btn-lg">Start reading <ArrowDown width={16} height={16} /></a>
-            <button type="button" onClick={surprise} className="btn btn-ghost btn-lg" disabled={busy}>Surprise me</button>
+            <button type="button" onClick={surprise} className="btn btn-ghost btn-lg" disabled={busy} aria-busy={busy}>{busy ? "Finding one…" : "Surprise me"}</button>
           </div>
         </div>
         {card && (
           <div className="floaty rise" style={{ animationDelay: "500ms" }}>
-            <aside className="float-card" key={k} aria-label="The latest thought" aria-live="polite">
+            <aside className={`float-card ${k > 0 ? "fade" : ""}`} key={k} aria-label="The latest thought" aria-live="polite">
               <p className="label"><span>{k === 0 ? "The latest thought" : "A thought from the archive"}</span><span>{fmtDate(card.published_at)}</span></p>
               <blockquote>{card.text}</blockquote>
               <div className="foot">

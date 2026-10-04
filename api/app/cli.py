@@ -23,7 +23,6 @@ from .services.passwords import hash_password
 from .services import content, drawing, images, storage
 from .services.security import anon_hash, token
 
-STARTER_BLOCKLIST = ["idiot", "moron", "scum", "bastard", "harami", "kameena", "haramkhor", "kutta", "हरामी", "कमीना"]
 TINTS = ["#cfe7e3", "#f6d9c6", "#d9e2f6", "#e6f2e8"]
 
 
@@ -161,7 +160,7 @@ async def seed(demo_stats: bool = True, owner_only: bool = False):
     async with SessionLocal() as db:
         s = await db.get(SiteSettings, 1)
         if not s:
-            db.add(SiteSettings(id=1, blocklist=STARTER_BLOCKLIST))
+            db.add(SiteSettings(id=1))
             await db.flush()
         owner = (await db.execute(select(User).where(User.role == "owner"))).scalars().first()
         if not owner:
@@ -313,7 +312,7 @@ async def ensure_owner():
     is no owner yet (so it never touches a password you have already changed)."""
     async with SessionLocal() as db:
         if not await db.get(SiteSettings, 1):
-            db.add(SiteSettings(id=1, blocklist=STARTER_BLOCKLIST))
+            db.add(SiteSettings(id=1))
             await db.flush()
         if not (await db.execute(select(User.id).where(User.role == "owner").limit(1))).first():
             db.add(User(login_id="admin", email=cfg.owner_email.lower(), name="Owner", role="owner", must_change_password=True,

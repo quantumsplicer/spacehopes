@@ -5,7 +5,7 @@ import ChangePassword from "@/components/studio/ChangePassword";
 import { fmtDate } from "@/lib/format";
 import { useStudio } from "@/components/studio/StudioShell";
 
-type S = { comment_mode: "name" | "signed_in"; review_comments: boolean; disable_copy: boolean; watermark: boolean; site_name: string; about_quote: string; about_byline: string; about_quote_confirmed: boolean; footer_line: string; social_links: { label: string; url: string }[]; blocklist: string[] };
+type S = { comment_mode: "name" | "signed_in"; review_comments: boolean; disable_copy: boolean; watermark: boolean; site_name: string; about_quote: string; about_byline: string; about_quote_confirmed: boolean; footer_line: string; social_links: { label: string; url: string }[]; mail_configured?: boolean };
 
 function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch-hit" onClick={() => onChange(!on)}><span className="switch" aria-checked={on} /></button>;
@@ -18,14 +18,12 @@ export default function Settings() {
   const [saved, setSaved] = useState("");
   const [err, setErr] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [block, setBlock] = useState("");
   const [audit, setAudit] = useState<any[] | null>(null);
-  const [editor, setEditor] = useState({ login_id: "", email: "", name: "", password: "" });
   const [asked, setAsked] = useState(false);
   useEffect(() => setAsked(location.search.includes("change=1")), []);
   const forced = asked || me.must_change;
 
-  useEffect(() => { get<S>("/settings").then((x) => { setS(x); setBlock(x.blocklist.join(", ")); }) }, []);
+  useEffect(() => { get<S>("/settings").then((x) => { setS(x); }) }, []);
 
   async function save(patch: Partial<S>) {
     if (!s || !owner) return;
@@ -45,6 +43,11 @@ export default function Settings() {
       <div className="s-body">
         {!owner && <p className="footnote" style={{ marginBottom: 20 }}>Editors can look at settings but only the owner can change them.</p>}
         {err && <p className="err" role="alert">{err}</p>}
+        {s.mail_configured === false && (
+          <div role="alert" className="footnote" style={{ background: "var(--flag-bg)", color: "var(--flag-fg)", marginBottom: 20 }}>
+            <b>Email is not set up yet.</b> Subscribers cannot sign up and readers cannot get sign-in codes until a mail service is added (see <code>docs/DEPLOY-FREE.md</code>, step 2).
+          </div>
+        )}
         <div className="set-grid">
           <div>
             <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 14px" }}>Who can comment</h2>
@@ -82,8 +85,6 @@ export default function Settings() {
               <div><label className="label" htmlFor="fl">Footer line (after “Space hopes.”)</label><input id="fl" className="field" disabled={!owner} value={s.footer_line} maxLength={200} onChange={(e) => debounced({ footer_line: e.target.value })} /></div>
             </div>
             <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
-              <div><label className="label" htmlFor="bl">Blocklist words (comma separated; English and Hindi; matches are flagged for you to decide)</label>
-                <textarea id="bl" className="field" rows={3} disabled={!owner} value={block} onChange={(e) => { setBlock(e.target.value); debounced({ blocklist: e.target.value.split(",").map((w) => w.trim()).filter(Boolean) }); }} /></div>
               <div><span className="label">Social links (shown on the Contact page)</span>
                 {s.social_links.map((l, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -101,19 +102,6 @@ export default function Settings() {
         <section className="set-section" aria-labelledby="sec-h" id="security">
           <h2 id="sec-h">Security</h2>
           <ChangePassword forced={forced} />
-          {owner && (
-            <div className="card" style={{ marginTop: 16 }}>
-              <h2>Add an editor</h2>
-              <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 12 }}>Editors can draft and moderate comments. They cannot publish or change settings. Choose a first password and share it privately; they must change it when they first sign in.</p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <input className="field" style={{ maxWidth: 160 }} placeholder="Login ID" aria-label="Editor login ID" autoComplete="off" value={editor.login_id} onChange={(e) => setEditor({ ...editor, login_id: e.target.value })} />
-                <input className="field" style={{ maxWidth: 220 }} placeholder="Email (for alerts)" aria-label="Editor email" autoComplete="off" value={editor.email} onChange={(e) => setEditor({ ...editor, email: e.target.value })} />
-                <input className="field" style={{ maxWidth: 160 }} placeholder="Name" aria-label="Editor name" autoComplete="off" value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} />
-                <input className="field" style={{ maxWidth: 200 }} type="password" placeholder="First password" aria-label="Editor first password" autoComplete="new-password" value={editor.password} onChange={(e) => setEditor({ ...editor, password: e.target.value })} />
-                <button className="btn btn-ghost" onClick={async () => { try { await post("/auth/editors", editor); setEditor({ login_id: "", email: "", name: "", password: "" }); setSaved("Editor added"); } catch (e: any) { setErr(e.message); } }}>Create</button>
-              </div>
-            </div>
-          )}
           {owner && (
             <div className="card" style={{ marginTop: 16 }}>
               <h2>Audit log</h2>

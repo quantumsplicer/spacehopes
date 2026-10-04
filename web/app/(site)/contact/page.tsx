@@ -15,7 +15,6 @@ export default async function Contact() {
         <p className="lead">Every message is read. A reply may take a little while.</p>
         <div className="links">
           {s.social_links.map((l) => <a key={l.url} href={l.url} rel="noopener noreferrer nofollow" target="_blank">{l.label}</a>)}
-          <a href="/rss.xml">RSS</a>
         </div>
       </div>
       <ContactForm />

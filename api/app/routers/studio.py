@@ -376,9 +376,12 @@ async def delete_media(media_id: int, request: Request, a: Owner, db: DB):
     m = await db.get(Media, media_id)
     if not m:
         return
-    used = (await db.execute(select(Post.id).where(cast(Post.body_json, String).op("~")(rf'"mediaId": {media_id}[,}}\s]')).limit(1))).first()
+    used = (await db.execute(select(Post).where(or_(
+        cast(Post.body_json, String).op("~")(rf'"mediaId": {media_id}[,}}\s]'), Post.cover_media_id == media_id)).limit(4))).scalars().all()
     if used:
-        raise HTTPException(409, "This picture is used in a post.")
+        names = ", ".join(f"“{(p.title or content.lead_text(p.body_json) or 'untitled')[:40]}”" for p in used[:3])
+        raise HTTPException(409, f"This {'drawing' if m.kind == 'drawing' else 'picture'} is used in {names}"
+                                 f"{' and more' if len(used) > 3 else ''}. Remove it from the post first, then delete it.")
     await storage.delete_prefix(m.prefix + "/")
     await db.delete(m)
     await audit(db, request, a.user.id, "media.deleted", target=str(media_id))
@@ -469,25 +472,22 @@ class SettingsIn(BaseModel):
     about_quote_confirmed: bool | None = None
     footer_line: str | None = Field(default=None, max_length=200)
     social_links: list[SocialLink] | None = Field(default=None, max_length=8)
-    blocklist: list[str] | None = Field(default=None, max_length=500)
 
 
 def settings_out(s) -> dict:
     return {k: getattr(s, k) for k in ("comment_mode", "review_comments", "disable_copy", "watermark", "site_name", "about_quote", "about_byline",
-                                       "about_quote_confirmed", "footer_line", "social_links", "blocklist")}
+                                       "about_quote_confirmed", "footer_line", "social_links")}
 
 
 @router.get("/settings")
 async def get_set(a: Staff, db: DB):
-    return settings_out(await get_settings(db))
+    return {**settings_out(await get_settings(db)), "mail_configured": cfg.mail_configured}
 
 
 @router.put("/settings")
 async def put_set(body: SettingsIn, request: Request, a: Owner, db: DB):
     s = await get_settings(db)
     data = body.model_dump(exclude_unset=True)
-    if "blocklist" in data:
-        data["blocklist"] = sorted({w.strip().lower()[:40] for w in data["blocklist"] if w.strip()})
     for k in ("site_name", "about_quote", "about_byline", "footer_line"):
         if k in data:
             data[k] = content.clean(data[k], 400).strip()

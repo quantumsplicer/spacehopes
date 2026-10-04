@@ -49,9 +49,28 @@ bash scripts/admin.sh check
 
 It prints `OK` or `FAILED` (with what to fix) for the database, the media bucket and the backup bucket. It never prints your secrets. `.env.remote` is git-ignored; delete it when you are done, or keep it for later admin tasks (step 8).
 
-## 2. Resend: email (5 minutes)
+## 2. Email (needed for subscriptions and reader sign-in codes)
 
-resend.com > sign up > **API Keys** > create one (`RESEND_API_KEY`). Without a domain use `MAIL_FROM=Space hopes <onboarding@resend.dev>`; mail then only reaches your own address (enough for sign-in alerts). When you own a domain: Resend > **Domains** > add it, create the DNS records it lists, and switch `MAIL_FROM` to `Space hopes <hello@your-domain>`. The free plan sends 100 emails a day.
+Until a mail service is added the site says "Email sign-up is not switched on yet" instead of pretending to send, and the Studio shows a red notice in Settings. Pick **one**:
+
+**A. Brevo (easiest without a domain).** brevo.com > sign up (free, 300 emails a day, no card) > **Senders, Domains & dedicated IPs > Senders > Add a sender**: use an address you control (for example your Gmail) and click the confirmation link they email you. Then **SMTP & API > SMTP**: note the *login* and create an *SMTP key*. Set these in Render's Environment tab:
+
+| Name | Value |
+|---|---|
+| `SMTP_HOST` | `smtp-relay.brevo.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USER` | the SMTP login Brevo shows |
+| `SMTP_PASSWORD` | the SMTP key |
+| `SMTP_TLS` | `true` |
+| `MAIL_FROM` | `Space hopes <the sender address you verified>` |
+
+Honest caveat: sending "from" a free Gmail address through Brevo works, but Gmail's own rules mean such emails often land in spam. For reliable delivery to subscribers, own a domain and verify it with Brevo or Resend.
+
+**B. Gmail.** In the Google account turn on 2-step verification, create an *App password* (myaccount.google.com > Security > App passwords), then set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER=your gmail address`, `SMTP_PASSWORD=the app password`, `SMTP_TLS=true`, `MAIL_FROM=Space hopes <your gmail address>`. Gmail allows about 500 emails a day.
+
+**C. Resend (best once you own a domain).** resend.com > sign up > **API Keys** > create one (`RESEND_API_KEY`) and verify your domain (**Domains**: add the DNS records it lists), then `MAIL_FROM=Space hopes <hello@your-domain>`. Without a verified domain Resend only delivers to your own address. Free plan: 100 emails a day.
+
+After saving the variables Render redeploys by itself. Test: subscribe on the site with your own address; the confirmation email should arrive within a minute.
 
 ## 3. Cloudflare Turnstile (optional, 5 minutes)
 
@@ -83,7 +102,7 @@ git push -u origin master
    | `S3_BACKUP_ENDPOINT`, `S3_BACKUP_ACCESS_KEY`, `S3_BACKUP_SECRET_KEY`, `S3_BACKUP_BUCKET` | project 2 |
    | `INITIAL_ADMIN_PASSWORD` | a temporary password only you know. The repository is public, so do **not** rely on the documented `admin@123`: a stranger could sign in first. You replace this password the first time you sign in |
    | `OWNER_EMAIL` | your private email: sign-in alerts and contact-form messages go here |
-   | `RESEND_API_KEY`, `MAIL_FROM` | step 2 |
+   | `SMTP_*` / `RESEND_API_KEY`, `MAIL_FROM` | step 2 (can be added after the first deploy) |
    | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | step 3 (or leave empty) |
    | `PUBLIC_URL` | leave empty at first: the site uses its own `https://space-hopes.onrender.com`-style address. If you add a domain later, set this to `https://your-domain` |
 

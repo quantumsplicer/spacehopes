@@ -8,6 +8,7 @@ import { fmtDate } from "@/lib/format";
 import { largest } from "@/lib/media";
 import BlockEditor, { type EditorActions } from "@/components/editor/BlockEditor";
 import DrawingStudio from "@/components/drawing/DrawingStudio";
+import MediaPicker from "@/components/studio/MediaPicker";
 import { LightboxProvider } from "@/components/site/Lightbox";
 import { Prose, lightboxItems } from "@/components/site/PostBody";
 import { useStudio } from "@/components/studio/StudioShell";
@@ -47,6 +48,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [err, setErr] = useState(""); const [info, setInfo] = useState("");
   const [uploading, setUploading] = useState(0);
   const [drawing, setDrawing] = useState<null | { id: number | null; caption: string; resolve: (m: MediaT | null) => void }>(null);
+  const [picker, setPicker] = useState<null | { allow: "image" | "drawing" | "both"; multiple: boolean; max: number; title?: string; resolve: (m: MediaT[]) => void }>(null);
   const [cropper, setCropper] = useState<null | { m: MediaT; resolve: (m: MediaT | null) => void }>(null);
   const [modal, setModal] = useState<null | "schedule" | "versions" | "preview">(null);
   const [versions, setVersions] = useState<any[]>([]);
@@ -123,15 +125,20 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     return out;
   }, [store]);
 
+  /** Opens the media library; everything chosen is registered so the editor can show it straight away. */
+  const openPicker = useCallback((allow: "image" | "drawing" | "both", multiple: boolean, max: number, title?: string) =>
+    new Promise<MediaT[]>((resolve) => setPicker({ allow, multiple, max, title, resolve: (items) => { items.forEach((m) => { store[m.id] = m; }); resolve(items); } })), [store]);
+
   const actions: EditorActions = useMemo(() => ({
-    pickImages: async (multiple) => { const f = await pickFiles(multiple); return f.length ? upload(multiple ? f : f.slice(0, 1)) : []; },
+    pickImages: (multiple) => openPicker("image", multiple, 12),
+    pickDrawing: async () => (await openPicker("drawing", false, 1))[0] ?? null,
     uploadFiles: upload,
     newDrawing: () => new Promise<MediaT | null>((resolve) => setDrawing({ id: null, caption: "", resolve })),
     editDrawing: (m) => new Promise<MediaT | null>((resolve) => setDrawing({ id: m.id, caption: m.caption, resolve })),
     cropImage: (m) => new Promise<MediaT | null>((resolve) => setCropper({ m, resolve })),
-    replaceImage: async () => { const f = await pickFiles(false); return f.length ? (await upload(f.slice(0, 1)))[0] ?? null : null; },
+    replaceImage: async () => (await openPicker("image", false, 1, "Choose a replacement picture"))[0] ?? null,
     patchMedia: (mid, p) => { if (store[mid]) store[mid] = { ...store[mid], ...p }; },
-  }), [upload, store]);
+  }), [upload, store, openPicker]);
 
   const finishDrawing = (m: MediaT | null) => { if (m) store[m.id] = m; drawing?.resolve(m); setDrawing(null); if (m) mark(); };
 
@@ -139,11 +146,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   async function addPhotos() {
     const hasDrawing = attach.some((a) => a.type === "drawing");
     if (hasDrawing && !confirm("A thought holds one drawing or up to four photos. Replace the drawing with photos?")) return;
-    const f = await pickFiles(true); if (!f.length) return;
     const room = 4 - (hasDrawing ? 0 : attach.length);
-    const ms = await upload(f.slice(0, Math.max(room, 0)));
-    if (f.length > room) setInfo("A thought can hold up to four photos.");
-    setAttach((a) => [...(hasDrawing ? [] : a), ...ms.map((m): Node => ({ type: "image", attrs: { mediaId: m.id, alt: "", caption: "", wide: false } }))]); mark();
+    if (room <= 0) { setInfo("A thought can hold up to four photos. Remove one first."); return; }
+    const ms = await openPicker("image", true, room, "Choose photos for this thought"); if (!ms.length) return;
+    setAttach((a) => [...(hasDrawing ? [] : a), ...ms.slice(0, room).map((m): Node => ({ type: "image", attrs: { mediaId: m.id, alt: m.alt || "", caption: "", wide: false } }))]); mark();
+  }
+  async function addSavedDrawing() {
+    if (attach.some((a) => a.type === "image") && !confirm("A thought holds one drawing or up to four photos. Replace the photos with a drawing?")) return;
+    const [m] = await openPicker("drawing", false, 1, "Choose a saved drawing"); if (!m) return;
+    setAttach([{ type: "drawing", attrs: { mediaId: m.id, alt: m.alt || "", caption: m.caption || "", wide: true } }]); mark();
   }
   async function addDrawing() {
     if (attach.some((a) => a.type === "image") && !confirm("A thought holds one drawing or up to four photos. Replace the photos with a drawing?")) return;
@@ -258,6 +269,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               <div style={{ display: "flex", gap: 10, margin: "18px 0", flexWrap: "wrap" }}>
                 <button className="btn btn-ghost" onClick={addDrawing}>Draw</button>
                 <button className="btn btn-ghost" onClick={addPhotos}>Photo</button>
+                <button className="btn btn-ghost" onClick={addSavedDrawing}>Saved drawing</button>
                 <span style={{ alignSelf: "center", fontSize: 13, color: "var(--muted)" }}>One drawing, or up to four photos. Location data is removed on upload.</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: attach.length > 1 ? "1fr 1fr" : "1fr", gap: 14 }}>
@@ -287,8 +299,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               <div><span className="label">Cover</span>
                 <div className="cover-box">{coverM ? <img src={largest(coverM, 640)} alt="" /> : null}</div>
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  <button className="btn btn-ghost btn-sm" onClick={async () => { const f = await pickFiles(false); if (f.length) { const [m] = await upload(f.slice(0, 1)); if (m) { setCover(m.id); mark(); } } }}>Upload cover</button>
-                  {images.filter((m) => m.id !== cover).slice(0, 3).map((m) => <button key={m.id} className="mini-chip add" onClick={() => { setCover(m.id); mark(); }}>Use picture {m.id}</button>)}
+                  <button className="btn btn-ghost btn-sm" onClick={async () => { const [m] = await openPicker("image", false, 1, "Choose a cover picture"); if (m) { setCover(m.id); mark(); } }}>{cover ? "Change cover" : "Choose cover"}</button>
                   {cover && <button className="linkbtn" onClick={() => { setCover(null); mark(); }}>Remove</button>}
                 </div>
                 {coverM && !coverM.alt && <p className="warn" style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 6 }}>Describe the cover in its caption below the picture on the site.</p>}
@@ -311,6 +322,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {drawing && <DrawingStudio mediaId={drawing.id} initialCaption={drawing.caption} onCancel={() => finishDrawing(null)} onSave={(m) => finishDrawing(m)} />}
+
+      {picker && <MediaPicker allow={picker.allow} multiple={picker.multiple} max={picker.max} title={picker.title} onDone={(items) => { picker.resolve(items); setPicker(null); }} onCancel={() => { picker.resolve([]); setPicker(null); }} />}
 
       {cropper && (
         <div className="modal-back" role="presentation"><div className="modal" role="dialog" aria-modal="true" aria-label="Crop picture">

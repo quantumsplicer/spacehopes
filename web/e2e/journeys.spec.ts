@@ -63,6 +63,8 @@ test("subscribe needs a confirmed email (double opt-in)", async ({ page }) => {
 test("contact form sends and shows the tick", async ({ page }) => {
   await page.goto("/contact");
   await expect(page.getByText("office", { exact: false })).toHaveCount(0); // no address, no grievance notice
+  await expect(page.locator(".contact-grid").getByText("RSS")).toHaveCount(0); // only the social links belong here
+  await expect(page.getByRole("link", { name: "LinkedIn" })).toHaveAttribute("href", /linkedin\.com\/in\/saravanan-murugan/);
   await page.getByLabel("Your name").fill("E2E Writer");
   await page.getByRole("textbox", { name: "Email" }).fill(`e2e.contact+${run}@example.com`);
   await page.getByRole("button", { name: "Media" }).click();
@@ -102,8 +104,12 @@ test("owner writes a blog with an image and a drawing, publishes, moderates, and
   // an image via the / menu (the file picker opens)
   await page.keyboard.type("/");
   await expect(page.getByRole("option", { name: /Image/ })).toBeVisible();
-  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("option", { name: /Image/ }).click()]);
+  await page.getByRole("option", { name: /^Image/ }).click();
+  const pk = page.getByRole("dialog", { name: "Choose from your media" });
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pk.getByRole("button", { name: "Upload new" }).click()]);
   await chooser.setFiles(IMG);
+  await expect(pk.getByRole("option", { selected: true })).toHaveCount(1);
+  await pk.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".nv img").first()).toBeVisible();
   await page.getByLabel("Alt text (required)").first().fill("A red field with a yellow sun");
 
@@ -207,7 +213,7 @@ test("Studio phone layout: bottom tab bar and the Write screen", async ({ browse
   await page.getByRole("link", { name: "Write" }).click();
   await page.waitForURL(/\/studio\/posts\/\d+/);
   await expect(page.getByPlaceholder("Write a thought. One to four sentences.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Draw" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Draw", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Photo" })).toBeVisible();
   await ctx.close();
 });
@@ -260,4 +266,64 @@ test("owner changes the password in the dashboard; the old one stops working", a
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/studio");
   credentials(true); // reset the test account for the next run
+});
+
+test("Surprise me always answers: a new thought, or a friendly message", async ({ page }) => {
+  await page.goto("/");
+  const quote = page.locator(".float-card blockquote");
+  await expect(quote).toBeVisible();
+  const first = await quote.textContent();
+  await page.getByRole("button", { name: "Surprise me" }).click();
+  await expect(page.locator(".float-card .label span").first()).toHaveText("A thought from the archive");
+  expect(await quote.textContent()).not.toBe(first);
+});
+
+test("the media library: choose a picture you already uploaded, and delete unused ones with the dustbin", async ({ page }) => {
+  await signInStudio(page);
+  // upload one through the picker inside a post
+  await page.getByRole("button", { name: "New blog" }).first().click();
+  await page.waitForURL(/\/studio\/posts\/\d+/);
+  await page.locator(".tiptap").click();
+  await page.keyboard.type("/");
+  await page.getByRole("option", { name: /^Image/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose from your media" });
+  await expect(picker).toBeVisible();
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), picker.getByRole("button", { name: "Upload new" }).click()]);
+  await chooser.setFiles(IMG);
+  await expect(picker.getByRole("option", { selected: true })).toHaveCount(1); // auto-selected after upload
+  await picker.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".nv img").first()).toBeVisible();
+
+  // a second post can choose it from the library without uploading again
+  await page.goto("/studio/posts");
+  await page.getByRole("button", { name: "New thought" }).click();
+  await page.waitForURL(/\/studio\/posts\/\d+/);
+  await page.getByRole("button", { name: "Photo", exact: true }).click();
+  const p2 = page.getByRole("dialog", { name: /Choose photos/ });
+  await expect(p2.getByRole("option").first()).toBeVisible();
+  await p2.getByRole("option").first().click();
+  await p2.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByLabel("Alt text (required)")).toBeVisible();
+
+  // Media page: upload a spare picture and delete it with the dustbin (it turns red on hover)
+  await page.goto("/studio/media");
+  await expect(page.locator(".tile").first()).toBeVisible(); // the grid has loaded
+  const count0 = await page.locator(".tile").count();
+  const [fc] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("button", { name: "Upload pictures" }).click()]);
+  await fc.setFiles(IMG);
+  await expect(page.locator(".tile")).toHaveCount(count0 + 1, { timeout: 15000 }); // wait for the new picture to appear
+  const tiles = page.locator(".tile");
+  await expect(tiles.first()).toBeVisible();
+  const before = await tiles.count();
+  const bin = tiles.first().getByRole("button", { name: /^Delete picture/ });
+  await bin.hover();
+  await expect.poll(() => bin.evaluate((e) => getComputedStyle(e).color)).toBe("rgb(180, 35, 24)");
+  page.once("dialog", (d) => d.accept());
+  await bin.click();
+  // the newest picture was never used in a post, so it goes; used ones would show a message instead
+  await expect(tiles).toHaveCount(before - 1, { timeout: 8000 });
+  // a picture that is used in a post cannot be deleted, and the message says so
+  page.once("dialog", (d) => d.accept());
+  await tiles.first().getByRole("button", { name: /^Delete picture/ }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "is used in" })).toBeVisible();
 });

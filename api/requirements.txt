@@ -61,3 +61,4 @@ uvloop==0.23.0
 watchfiles==1.3.0
 websockets==17.1
 wrapt==2.5.0
+rapidfuzz==3.14.6

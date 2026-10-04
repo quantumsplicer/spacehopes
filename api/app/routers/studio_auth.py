@@ -11,14 +11,13 @@ Defences, in order of what an attacker who can only see the login page would try
 """
 import asyncio
 import datetime as dt
-import re
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 
 from ..config import cfg
-from ..deps import ABSOLUTE, DB, SESSION_COOKIE, Auth, Owner, Staff, _load, audit, limiter
+from ..deps import ABSOLUTE, DB, SESSION_COOKIE, Staff, _load, audit, limiter
 from ..models import AuthFailure, Session, User, now
 from ..routers.public import turnstile
 from ..services.mail import send_safe
@@ -178,31 +177,3 @@ async def change_password(body: PasswordIn, request: Request, response: Response
                                   "Your Studio password was just changed and you were signed out everywhere else. "
                                   "If this was not you, you need to reset it with the server operator immediately."))
     return {"ok": True, "csrf": s.csrf, "login_id": new_login}
-
-
-class NewEditor(BaseModel):
-    login_id: str = Field(max_length=64)
-    email: EmailStr
-    name: str = Field(default="", max_length=80)
-    password: str = Field(max_length=256)
-
-
-@router.post("/editors", status_code=201)
-async def create_editor(body: NewEditor, request: Request, a: Owner, db: DB):
-    """Owner adds an editor (draft + moderate only). The owner chooses a first password and shares it privately;
-    the editor must change it at first sign-in."""
-    login = body.login_id.strip().lower()
-    if not LOGIN_ID.match(login):
-        raise HTTPException(422, "A login ID is 3 to 32 characters: lower-case letters, numbers, dot, dash or underscore.")
-    err = policy_error(body.password, login)
-    if err:
-        raise HTTPException(422, err)
-    if (await db.execute(select(User.id).where((User.login_id == login) | (User.email == body.email.lower())))).first():
-        raise HTTPException(409, "That login ID or email already has an account.")
-    u = User(login_id=login, email=body.email.lower(), name=body.name, role="editor", must_change_password=True,
-             password_hash=await asyncio.to_thread(hash_password, body.password))
-    db.add(u)
-    await db.flush()
-    await audit(db, request, a.user.id, "user.editor_created", target=str(u.id))
-    await db.commit()
-    return {"id": u.id, "login_id": login}

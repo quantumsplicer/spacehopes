@@ -147,8 +147,8 @@ async def test_publish_blocked_without_alt_text(owner):
 # ---- settings, scheduling, conflicts ---------------------------------------------------------------------------
 
 async def test_settings_update_and_public_view(owner):
-    r = await owner.put("/api/v1/studio/settings", json={"site_name": "Quill", "disable_copy": False, "blocklist": ["Foo", " bar "]})
-    assert r.status_code == 200 and r.json()["blocklist"] == ["bar", "foo"]
+    r = await owner.put("/api/v1/studio/settings", json={"site_name": "Quill", "disable_copy": False})
+    assert r.status_code == 200 and r.json()["site_name"] == "Quill"
     pub = (await owner.get("/api/v1/settings/public")).json()
     assert pub["site_name"] == "Quill" and pub["disable_copy"] is False and "blocklist" not in pub
 
@@ -190,3 +190,40 @@ async def test_feed_search_and_cursor(owner, make_blog):
     nxt = (await owner.get(f"/api/v1/feed?limit=2&cursor={page['next_cursor']}")).json()
     assert len(nxt["items"]) == 2 and not nxt["next_cursor"]
     assert not {i["id"] for i in page["items"]} & {i["id"] for i in nxt["items"]}
+
+
+# ---- deleting media, and honest email behaviour ----------------------------------------------------------------
+
+async def test_unused_media_can_be_deleted_but_used_media_is_protected(owner, make_blog):
+    m = (await upload(owner, png_bytes())).json()
+    r = await owner.delete(f"/api/v1/studio/media/{m['id']}")
+    assert r.status_code == 204
+    assert (await owner.get(f"/api/v1/media/{m['key']}/640.webp")).status_code == 404  # the files are gone too
+
+    m2 = (await upload(owner, png_bytes())).json()
+    pid = (await owner.post("/api/v1/studio/posts", json={"type": "blog"})).json()["id"]
+    body = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "words"}]},
+                                       {"type": "image", "attrs": {"mediaId": m2["id"], "alt": "A picture", "caption": ""}}]}
+    await owner.put(f"/api/v1/studio/posts/{pid}", json={"title": "My post", "body": body})
+    r = await owner.delete(f"/api/v1/studio/media/{m2['id']}")
+    assert r.status_code == 409 and "My post" in r.json()["detail"]  # says where it is used
+
+    m3 = (await upload(owner, png_bytes())).json()
+    await owner.put(f"/api/v1/studio/posts/{pid}", json={"cover_media_id": m3["id"]})
+    assert (await owner.delete(f"/api/v1/studio/media/{m3['id']}")).status_code == 409  # a blog cover counts as use
+
+
+async def test_drawings_can_be_deleted_too(owner):
+    doc = {"version": 1, "width": 800, "height": 600, "layers": [{"id": "l1", "name": "Ink", "strokes": []}]}
+    m = (await owner.post("/api/v1/studio/media/drawing", data={"doc": json.dumps(doc)}, files={"png": ("d.png", png_bytes((800, 600), "RGBA"), "image/png")})).json()
+    assert (await owner.delete(f"/api/v1/studio/media/{m['id']}")).status_code == 204
+    assert (await owner.get(f"/api/v1/studio/media/{m['id']}/drawing")).status_code == 404
+
+
+async def test_subscribe_is_honest_when_no_mail_service_is_set_up(client, monkeypatch):
+    from app.config import Config
+    monkeypatch.setattr(Config, "mail_configured", property(lambda self: False))
+    r = await client.post("/api/v1/subscribe", json={"email": "someone@example.com"})
+    assert r.status_code == 503 and "not switched on" in r.json()["detail"]
+    r = await client.post("/api/v1/reader/otp/request", json={"email": "someone@example.com", "name": "S"})
+    assert r.status_code == 503

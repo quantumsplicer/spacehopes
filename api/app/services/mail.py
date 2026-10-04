@@ -32,8 +32,10 @@ class SmtpMailer:
         m.set_content(text)
         if html:
             m.add_alternative(html, subtype="html")
+        implicit = cfg.smtp_port == 465  # port 465 speaks TLS from the first byte; 587 upgrades with STARTTLS
         await aiosmtplib.send(m, hostname=cfg.smtp_host, port=cfg.smtp_port, username=cfg.smtp_user or None,
-                              password=cfg.smtp_password or None, start_tls=cfg.smtp_tls)
+                              password=cfg.smtp_password or None, use_tls=implicit, start_tls=(cfg.smtp_tls and not implicit) or None,
+                              timeout=20)
 
 
 mailer: Mailer = ResendMailer() if cfg.resend_api_key else SmtpMailer()
@@ -44,7 +46,7 @@ async def send_safe(to: str, subject: str, text: str, html: str | None = None):
     try:
         await mailer.send(to, subject, text, html)
     except Exception as e:  # noqa: BLE001
-        log.warning("mail to %s failed: %s", "<redacted>", type(e).__name__)
+        log.warning("mail failed (%s): %s", type(e).__name__, str(e)[:200])  # never logs the recipient
 
 
 def wrap_html(body: str) -> str:

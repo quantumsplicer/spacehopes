@@ -29,6 +29,10 @@ class Config(BaseSettings):
     smtp_tls: bool = False
     mail_from: str = "Thoughts <hello@localhost>"
     resend_api_key: str = ""
+    # Sending through a Google Apps Script web app deployed under a Gmail account. It is plain HTTPS, so it also works on hosts
+    # that block SMTP ports (Render free plan). See docs/mail-relay.gs and docs/DEPLOY-FREE.md.
+    apps_script_mail_url: str = ""
+    apps_script_mail_secret: str = ""
 
     turnstile_secret: str = ""
     turnstile_site_key: str = ""
@@ -55,7 +59,7 @@ class Config(BaseSettings):
     @property
     def mail_configured(self) -> bool:
         """True when a real mail provider is set (or in development, where mail goes to the local Mailpit inbox)."""
-        return self.is_dev or bool(self.resend_api_key) or self.smtp_host not in ("", "mailpit")
+        return self.is_dev or bool(self.resend_api_key) or bool(self.apps_script_mail_url) or self.smtp_host not in ("", "mailpit")
 
     @field_validator("database_url")
     @classmethod

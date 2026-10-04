@@ -31,8 +31,8 @@ The sample posts, comments, subscribers and 120 days of analytics are placeholde
 | `dev` / `down` / `logs` | start, stop, follow logs |
 | `migrate` | apply database migrations (also automatic on start) |
 | `seed` | placeholder content and the owner account |
-| `test` | backend tests (95), on a throwaway database and bucket |
-| `e2e` | browser journeys (Playwright, 12), see below |
+| `test` | backend tests (98), on a throwaway database and bucket |
+| `e2e` | browser journeys (Playwright, 13), see below |
 | `backup` / `restore` | encrypted `pg_dump` + media manifest to the bucket; `make restore` replaces the current database with the newest backup (`NAME=...` for another) |
 | `audit` | `pip-audit` and `npm audit` (also in CI) |
 

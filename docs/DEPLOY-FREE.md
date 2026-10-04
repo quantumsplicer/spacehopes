@@ -20,7 +20,7 @@ Visitor ──> Render (free web service, one container) ──┬─ Caddy ─>
 | **Small storage** | Supabase free: 500 MB database, 1 GB for pictures and backups, 50 MB per file. That is a few hundred posts and a thousand-odd photos. |
 | **Supabase pausing** | Free projects pause after a week of inactivity. The site talks to the database every 30 seconds, so it stays active. If a project ever does pause, open the Supabase dashboard and click *Restore*. |
 | **No server shell** | Render's free plan has no terminal. Admin tasks (reset a password, backup, restore) run from your own computer with `scripts/admin.sh` (step 8). |
-| **Email needs a domain** | Resend only lets you email *other people* (subscribers, replies) from a domain you have verified. Until then it only reaches your own address. |
+| **Email limits** | Free Render blocks SMTP, so mail goes through a Gmail Apps Script relay (about 100 emails a day) or Resend (needs a domain). A post that is emailed to more than 100 subscribers in a day needs a bigger plan. |
 | **Free tiers can change** | Check Render's and Supabase's pricing pages occasionally. |
 
 If you later get a card and want a faster, always-on server, `docs/DEPLOY.md` (Oracle VM route) is ready; your data moves over with `scripts/admin.sh backup` and `restore`.
@@ -51,26 +51,31 @@ It prints `OK` or `FAILED` (with what to fix) for the database, the media bucket
 
 ## 2. Email (needed for subscriptions and reader sign-in codes)
 
-Until a mail service is added the site says "Email sign-up is not switched on yet" instead of pretending to send, and the Studio shows a red notice in Settings. Pick **one**:
+**Render's free plan blocks the usual email ports (25, 465 and 587)**, so ordinary SMTP (Gmail, Brevo and so on) cannot work from it. Email has to travel over HTTPS. Until it is set up the site says "Email sign-up is not switched on yet" and the Studio shows a red notice in Settings.
 
-**A. Brevo (easiest without a domain).** brevo.com > sign up (free, 300 emails a day, no card) > **Senders, Domains & dedicated IPs > Senders > Add a sender**: use an address you control (for example your Gmail) and click the confirmation link they email you. Then **SMTP & API > SMTP**: note the *login* and create an *SMTP key*. Set these in Render's Environment tab:
+**Option A (recommended): send from your Gmail address through a small Google Apps Script.** Free, about 5 minutes, no Google Cloud project, and the mail really leaves from your Gmail account (so it is trusted by Gmail). A normal Gmail account can send about **100 emails a day** this way.
 
-| Name | Value |
-|---|---|
-| `SMTP_HOST` | `smtp-relay.brevo.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_USER` | the SMTP login Brevo shows |
-| `SMTP_PASSWORD` | the SMTP key |
-| `SMTP_TLS` | `true` |
-| `MAIL_FROM` | `Space hopes <the sender address you verified>` |
+1. Sign in to the Gmail account that should send (for example `spacehopes@gmail.com`) and open script.google.com > **New project**.
+2. Replace the code with the contents of `docs/mail-relay.gs`. Change `PASTE-THE-SECRET-HERE` to a long random secret (any 40+ random letters and digits; keep a copy). The same value goes into Render as `APPS_SCRIPT_MAIL_SECRET`.
+3. Choose the function **authorize** at the top and click **Run** once. Google asks you to approve sending email: click through (*Advanced > Go to project (unsafe)* is normal for your own script).
+4. **Deploy > New deployment**, type **Web app**, *Execute as:* **Me**, *Who has access:* **Anyone**, **Deploy**. Copy the **Web app URL** (it ends in `/exec`).
+5. In Render's Environment tab add:
 
-Honest caveat: sending "from" a free Gmail address through Brevo works, but Gmail's own rules mean such emails often land in spam. For reliable delivery to subscribers, own a domain and verify it with Brevo or Resend.
+   | Name | Value |
+   |---|---|
+   | `APPS_SCRIPT_MAIL_URL` | the Web app URL from step 4 |
+   | `APPS_SCRIPT_MAIL_SECRET` | the secret from step 2 |
+   | `MAIL_FROM` | `Space hopes <spacehopes@gmail.com>` (the Gmail address; it is the display name that matters) |
 
-**B. Gmail.** In the Google account turn on 2-step verification, create an *App password* (myaccount.google.com > Security > App passwords), then set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER=your gmail address`, `SMTP_PASSWORD=the app password`, `SMTP_TLS=true`, `MAIL_FROM=Space hopes <your gmail address>`. Gmail allows about 500 emails a day.
+6. Render redeploys. Then check it from your computer: `bash scripts/admin.sh test-email you@example.com` (needs `.env.remote` with the same three values). It prints SENT, or the exact reason it failed.
 
-**C. Resend (best once you own a domain).** resend.com > sign up > **API Keys** > create one (`RESEND_API_KEY`) and verify your domain (**Domains**: add the DNS records it lists), then `MAIL_FROM=Space hopes <hello@your-domain>`. Without a verified domain Resend only delivers to your own address. Free plan: 100 emails a day.
+Anyone who knows the URL but not the secret cannot send anything. If the secret ever leaks, change it in the script, deploy a **new version**, and update Render.
 
-After saving the variables Render redeploys by itself. Test: subscribe on the site with your own address; the confirmation email should arrive within a minute.
+**Option B: Resend (best once you own a domain).** resend.com > sign up > **API Keys** (`RESEND_API_KEY`) and verify your domain under **Domains**, then `MAIL_FROM=Space hopes <hello@your-domain>`. Resend is also HTTPS, so it works on Render. Free plan: 100 emails a day. Without a verified domain it only delivers to your own address.
+
+(Plain SMTP with `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` is still supported for hosts that allow it, such as the VM route in `docs/DEPLOY.md`, but not on Render's free plan.)
+
+After saving, subscribe on the site with your own address; the confirmation email should arrive within a minute (check spam the first time).
 
 ## 3. Cloudflare Turnstile (optional, 5 minutes)
 
@@ -102,7 +107,7 @@ git push -u origin master
    | `S3_BACKUP_ENDPOINT`, `S3_BACKUP_ACCESS_KEY`, `S3_BACKUP_SECRET_KEY`, `S3_BACKUP_BUCKET` | project 2 |
    | `INITIAL_ADMIN_PASSWORD` | a temporary password only you know. The repository is public, so do **not** rely on the documented `admin@123`: a stranger could sign in first. You replace this password the first time you sign in |
    | `OWNER_EMAIL` | your private email: sign-in alerts and contact-form messages go here |
-   | `SMTP_*` / `RESEND_API_KEY`, `MAIL_FROM` | step 2 (can be added after the first deploy) |
+   | `APPS_SCRIPT_MAIL_URL`, `APPS_SCRIPT_MAIL_SECRET`, `MAIL_FROM` (or `RESEND_API_KEY`) | step 2 (can be added after the first deploy) |
    | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | step 3 (or leave empty) |
    | `PUBLIC_URL` | leave empty at first: the site uses its own `https://space-hopes.onrender.com`-style address. If you add a domain later, set this to `https://your-domain` |
 

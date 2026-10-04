@@ -146,12 +146,18 @@ async def latest_thought(db: DB):
 
 
 @router.get("/thoughts/random")
-async def random_thought(db: DB, exclude: int | None = None):
+async def random_thought(db: DB, response: Response, exclude: str | None = None):
+    """A random thought, avoiding the ids in `exclude` (comma separated: the ones already shown). When every thought has
+    been shown, it starts a new round, only avoiding the most recent one so it never repeats back to back."""
+    response.headers["Cache-Control"] = "no-store"
+    seen = [int(x) for x in (exclude or "").split(",") if x.strip().isdigit()][:100]
     ids = (await db.execute(select(Post.id).where(Post.type == "thought", published()))).scalars().all()
-    ids = [i for i in ids if i != exclude] or ids
     if not ids:
         raise HTTPException(404, "No thoughts yet")
-    p = await db.get(Post, random.choice(ids))
+    fresh = [i for i in ids if i not in seen]
+    if not fresh:
+        fresh = [i for i in ids if i != (seen[-1] if seen else None)] or ids
+    p = await db.get(Post, random.choice(fresh))
     (c,) = await cards(db, [p])
     return c
 

@@ -307,6 +307,34 @@ async def check():
     print("All good." if ok else "Fix the items marked FAILED, then run this again.")
 
 
+async def test_email(to: str):
+    """Send one real test message and show the real result (unlike the site, which hides mail errors from visitors)."""
+    from .services import mail as _m
+    kind = "Resend" if cfg.resend_api_key else "the Google Apps Script relay" if cfg.apps_script_mail_url else f"SMTP ({cfg.smtp_host}:{cfg.smtp_port})"
+    print(f"Sending a test email to {to} through {kind} as {cfg.mail_from} ...")
+    try:
+        await _m.mailer.send(to, "Test email from Space hopes", "If you can read this, the site can send email.",
+                             _m.wrap_html("<p>If you can read this, the <b>Space hopes</b> site can send email.</p>"))
+        print("SENT. Check the inbox (and the spam folder) of", to)
+    except Exception as e:  # noqa: BLE001
+        hint = ""
+        t = str(e).lower()
+        if "forbidden" in t:
+            hint = "  -> The relay rejected the secret. APPS_SCRIPT_MAIL_SECRET must equal SECRET in the Apps Script."
+        elif "bad address" in t or "refused" in t:
+            hint = "  -> The relay answered but refused the message (see the text above)."
+        elif "534" in t or "535" in t or "authentication" in t or "username and password" in t or "unexpected eof" in t or "unexpectedly closed" in t or "disconnected" in t:
+            hint = "  -> The login was refused (Gmail just hangs up on a wrong login). Use a 16-character App Password with 2-Step Verification on. NOTE: Render's free plan blocks SMTP entirely; use the Apps Script relay there."
+        elif "name or service not known" in t or "getaddrinfo" in t:
+            hint = "  -> The mail server name is wrong or unreachable."
+        elif "timed out" in t or "timeout" in t:
+            hint = "  -> The mail server did not answer (wrong port?). Use 587 with SMTP_TLS=true, or 465."
+        print(f"FAILED: {type(e).__name__}: {str(e)[:300]}")
+        if hint:
+            print(hint)
+        sys.exit(1)
+
+
 async def ensure_owner():
     """Runs at every start on hosts without a shell: creates the settings row and the starting owner login only if there
     is no owner yet (so it never touches a password you have already changed)."""
@@ -340,6 +368,8 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "seed":
         asyncio.run(seed("--no-demo-stats" not in sys.argv, "--owner-only" in sys.argv))
+    elif cmd == "test-email" and len(sys.argv) > 2:
+        asyncio.run(test_email(sys.argv[2]))
     elif cmd == "check":
         asyncio.run(check())
     elif cmd == "ensure-owner":
@@ -353,4 +383,4 @@ if __name__ == "__main__":
     elif cmd == "restore":
         asyncio.run(restore(sys.argv[2] if len(sys.argv) > 2 else None))
     else:
-        sys.exit("usage: python -m app.cli check | seed [--no-demo-stats | --owner-only] | backup | restore [name] | reset-password <login_id>")
+        sys.exit("usage: python -m app.cli check | test-email <address> | seed [--no-demo-stats | --owner-only] | backup | restore [name] | reset-password <login_id>")

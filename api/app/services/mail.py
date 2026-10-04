@@ -1,6 +1,7 @@
 """Email behind a small interface: Resend when RESEND_API_KEY is set, otherwise SMTP (Mailpit locally)."""
 import logging
 from email.message import EmailMessage
+from email.utils import parseaddr
 from typing import Protocol
 
 import aiosmtplib
@@ -25,6 +26,20 @@ class ResendMailer:
             r.raise_for_status()
 
 
+class AppsScriptMailer:
+    """Posts the message to a small Google Apps Script web app that sends it from the Gmail account it belongs to.
+    Plain HTTPS: no SMTP port needed. The shared secret keeps strangers from using the relay."""
+
+    async def send(self, to, subject, text, html=None):
+        name = parseaddr(cfg.mail_from)[0] or "Space hopes"
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:  # Apps Script answers through a redirect
+            r = await c.post(cfg.apps_script_mail_url, json={"secret": cfg.apps_script_mail_secret, "to": to, "subject": subject,
+                                                             "text": text, "html": html, "name": name})
+        r.raise_for_status()
+        if r.text.strip() != "ok":
+            raise RuntimeError(f"mail relay refused: {r.text.strip()[:120]}")
+
+
 class SmtpMailer:
     async def send(self, to, subject, text, html=None):
         m = EmailMessage()
@@ -38,7 +53,7 @@ class SmtpMailer:
                               timeout=20)
 
 
-mailer: Mailer = ResendMailer() if cfg.resend_api_key else SmtpMailer()
+mailer: Mailer = ResendMailer() if cfg.resend_api_key else AppsScriptMailer() if cfg.apps_script_mail_url else SmtpMailer()
 
 
 async def send_safe(to: str, subject: str, text: str, html: str | None = None):

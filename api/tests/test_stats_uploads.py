@@ -227,3 +227,26 @@ async def test_subscribe_is_honest_when_no_mail_service_is_set_up(client, monkey
     assert r.status_code == 503 and "not switched on" in r.json()["detail"]
     r = await client.post("/api/v1/reader/otp/request", json={"email": "someone@example.com", "name": "S"})
     assert r.status_code == 503
+
+
+async def test_surprise_me_shows_every_thought_before_repeating(owner):
+    ids = []
+    for i in range(3):
+        pid = (await owner.post("/api/v1/studio/posts", json={"type": "thought"})).json()["id"]
+        body = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": f"thought number {i}"}]}]}
+        await owner.put(f"/api/v1/studio/posts/{pid}", json={"body": body})
+        assert (await owner.post(f"/api/v1/studio/posts/{pid}/publish")).status_code == 200
+        ids.append(pid)
+    seen = [ids[0]]
+    for _ in range(2):  # two more clicks reach the other two thoughts, never an already-seen one
+        r = await owner.get(f"/api/v1/thoughts/random?exclude={','.join(map(str, seen))}")
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+        assert r.json()["id"] not in seen
+        seen.append(r.json()["id"])
+    assert set(seen) == set(ids)
+    # everything has been seen: a new round starts, but never repeats the one just shown
+    for _ in range(6):
+        nxt = (await owner.get(f"/api/v1/thoughts/random?exclude={','.join(map(str, seen))}")).json()["id"]
+        assert nxt != seen[-1]
+        seen = [nxt]
+    assert (await owner.get("/api/v1/thoughts/random?exclude=abc,,1")).status_code == 200  # junk in the list is ignored

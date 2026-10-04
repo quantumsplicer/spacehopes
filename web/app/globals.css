@@ -32,11 +32,13 @@ h1, h2, h3, p { margin: 0; }
 @keyframes float { 0%, 100% { transform: translateY(-8px) rotate(-.6deg); } 50% { transform: translateY(8px) rotate(.6deg); } }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(15, 118, 110, .45); } 70% { box-shadow: 0 0 0 9px rgba(15, 118, 110, 0); } 100% { box-shadow: 0 0 0 0 rgba(15, 118, 110, 0); } }
 @keyframes pop { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes swap { 0% { opacity: 0; transform: translateY(14px) scale(.97); box-shadow: 0 0 0 0 rgba(15, 118, 110, .35); } 60% { opacity: 1; box-shadow: 0 0 0 10px rgba(15, 118, 110, 0); } 100% { opacity: 1; transform: none; } }
 @keyframes sheet { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .rise { opacity: 0; animation: rise .9s var(--ease) forwards; }
 .fade { opacity: 0; animation: fade .6s ease forwards; }
 .word { display: inline-block; opacity: 0; animation: rise .9s var(--ease) forwards; }
+.float-card.swap { animation: swap .6s var(--ease) both; }
 .floaty { animation: float 7s ease-in-out infinite; }
 .pop { animation: pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); display: inline-block; animation: pulse 2s infinite; }
@@ -362,7 +364,7 @@ textarea.field { resize: vertical; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-  .rise, .fade, .word { opacity: 1 !important; transform: none !important; }
+  .rise, .fade, .word, .float-card.swap { opacity: 1 !important; transform: none !important; }
   .glow::before { display: none; }
   .drawing-fig .raster { opacity: 1 !important; } .drawing-fig .animated { display: none; }
 }

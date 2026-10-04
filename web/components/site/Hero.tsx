@@ -12,6 +12,7 @@ export default function Hero({ latest }: { latest: Card | null }) {
   const [card, setCard] = useState<Card | null>(latest);
   const [ago, setAgo] = useState("");
   const [k, setK] = useState(0);
+  const [seen, setSeen] = useState<number[]>(latest ? [latest.id] : []);
   const [busy, setBusy] = useState(false);
   useEffect(() => setAgo(timeAgo(latest?.published_at)), [latest]);
 
@@ -19,11 +20,17 @@ export default function Hero({ latest }: { latest: Card | null }) {
     if (busy) return;
     setBusy(true);
     try {
-      const c = await cfetch<Card>(`/thoughts/random${card ? `?exclude=${card.id}` : ""}`);
-      if (card && c.id === card.id) toast("That is the only thought so far. More are on the way.");
-      else { setCard(c); setK((x) => x + 1); }
+      // ask for a thought we have not shown yet; the server starts a new round when all have been seen
+      const r = await fetch(`/api/v1/thoughts/random?exclude=${seen.join(",")}&t=${Date.now()}`, { cache: "no-store" });
+      if (r.status === 404) toast("There are no thoughts to show yet. Please check back soon.");
+      else if (!r.ok) toast(`Could not load another thought (error ${r.status}). Please try again.`);
+      else {
+        const c = (await r.json()) as Card;
+        if (card && c.id === card.id) toast("That is the only thought so far. More are on the way.");
+        else { setCard(c); setSeen((x) => [...x.filter((i) => i !== c.id), c.id].slice(-50)); setK((x) => x + 1); }
+      }
     } catch {
-      toast("There are no thoughts to show yet. Please check back soon.");
+      toast("Could not reach the site. Check your connection and try again.");
     }
     setBusy(false);
   }
@@ -53,7 +60,7 @@ export default function Hero({ latest }: { latest: Card | null }) {
         </div>
         {card && (
           <div className="floaty rise" style={{ animationDelay: "500ms" }}>
-            <aside className={`float-card ${k > 0 ? "fade" : ""}`} key={k} aria-label="The latest thought" aria-live="polite">
+            <aside className={`float-card ${k > 0 ? "swap" : ""}`} key={k} aria-label="The latest thought" aria-live="polite">
               <p className="label"><span>{k === 0 ? "The latest thought" : "A thought from the archive"}</span><span>{fmtDate(card.published_at)}</span></p>
               <blockquote>{card.text}</blockquote>
               <div className="foot">

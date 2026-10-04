@@ -327,3 +327,16 @@ test("the media library: choose a picture you already uploaded, and delete unuse
   await tiles.first().getByRole("button", { name: /^Delete picture/ }).click();
   await expect(page.getByRole("alert").filter({ hasText: "is used in" })).toBeVisible();
 });
+
+test("Studio > Settings > Email: a test message really goes out", async ({ page }) => {
+  await signInStudio(page);
+  await page.goto("/studio/settings");
+  await expect(page.getByRole("heading", { name: "Email" })).toBeVisible();
+  await expect(page.getByText("Sending through:")).toBeVisible();
+  const to = `e2e.test+${run}@example.com`;
+  await page.getByLabel("Send the test to").fill(to);
+  await page.getByRole("button", { name: "Send a test email" }).click();
+  await expect(page.getByText(/Sent through/)).toBeVisible();
+  const mail = await mailTo(to, "Test email");
+  expect(mail.Subject).toBe("Test email from Space hopes");
+});

@@ -56,6 +56,39 @@ class SmtpMailer:
 mailer: Mailer = ResendMailer() if cfg.resend_api_key else AppsScriptMailer() if cfg.apps_script_mail_url else SmtpMailer()
 
 
+def provider_name() -> str:
+    if cfg.resend_api_key:
+        return "Resend"
+    if cfg.apps_script_mail_url:
+        return "Gmail (Google Apps Script relay)"
+    if cfg.smtp_host in ("", "mailpit"):
+        return "Local test inbox (Mailpit)" if cfg.is_dev else "none"
+    return f"SMTP ({cfg.smtp_host}:{cfg.smtp_port})"
+
+
+def explain(e: Exception) -> str:
+    """A plain-language reason for a failed send, with what to do about it."""
+    t = str(e).lower()
+    if "forbidden" in t:
+        return "The relay rejected the secret. APPS_SCRIPT_MAIL_SECRET must equal SECRET in the Apps Script."
+    if "bad address" in t:
+        return "That email address does not look valid."
+    if "refused" in t and "relay" in t:
+        return f"The relay answered but refused the message: {str(e)[:160]}"
+    if "authorization" in t or "permission" in t or "gmailapp" in t:
+        return ("Google has not given the script permission to use Gmail yet. Open the script, run the function authorize, "
+                "approve the permission, then deploy a new version.")
+    if "534" in t or "535" in t or "authentication" in t or "username and password" in t or "unexpected eof" in t or "disconnected" in t:
+        return "The mail server refused the login. For Gmail use a 16-character App Password. Render's free plan blocks SMTP; use the Apps Script relay there."
+    if "name or service not known" in t or "getaddrinfo" in t or "nodename" in t:
+        return "The mail server address could not be found. Check the URL or host name."
+    if "timed out" in t or "timeout" in t:
+        return "The mail service did not answer in time. If you are using SMTP, the port may be blocked on this host."
+    if "401" in t or "403" in t:
+        return "The mail service rejected the credentials."
+    return f"{type(e).__name__}: {str(e)[:160]}"
+
+
 async def send_safe(to: str, subject: str, text: str, html: str | None = None):
     """Never let an email failure break a request."""
     try:

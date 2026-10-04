@@ -5,7 +5,7 @@ import ChangePassword from "@/components/studio/ChangePassword";
 import { fmtDate } from "@/lib/format";
 import { useStudio } from "@/components/studio/StudioShell";
 
-type S = { comment_mode: "name" | "signed_in"; review_comments: boolean; disable_copy: boolean; watermark: boolean; site_name: string; about_quote: string; about_byline: string; about_quote_confirmed: boolean; footer_line: string; social_links: { label: string; url: string }[]; mail_configured?: boolean };
+type S = { comment_mode: "name" | "signed_in"; review_comments: boolean; disable_copy: boolean; watermark: boolean; site_name: string; about_quote: string; about_byline: string; about_quote_confirmed: boolean; footer_line: string; social_links: { label: string; url: string }[]; mail_configured?: boolean; mail?: { configured: boolean; provider: string; from: string; owner_email: string } };
 
 function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch-hit" onClick={() => onChange(!on)}><span className="switch" aria-checked={on} /></button>;
@@ -18,6 +18,9 @@ export default function Settings() {
   const [saved, setSaved] = useState("");
   const [err, setErr] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [testTo, setTestTo] = useState("");
+  const [testState, setTestState] = useState<null | { ok: boolean; text: string }>(null);
+  const [testing, setTesting] = useState(false);
   const [audit, setAudit] = useState<any[] | null>(null);
   const [asked, setAsked] = useState(false);
   useEffect(() => setAsked(location.search.includes("change=1")), []);
@@ -33,6 +36,12 @@ export default function Settings() {
   }
   const debounced = (patch: Partial<S>) => { if (!s) return; setS({ ...s, ...patch }); clearTimeout(timer.current); timer.current = setTimeout(() => save(patch), 700); };
 
+  async function sendTest() {
+    setTesting(true); setTestState(null);
+    try { const r = await post("/settings/test-email", { to: testTo || me.user.email }); setTestState({ ok: true, text: `Sent through ${r.provider}. Check the inbox of ${testTo || me.user.email} (and its spam folder), and the Sent folder of the sending account.` }); }
+    catch (e: any) { setTestState({ ok: false, text: e.message }); }
+    setTesting(false);
+  }
   async function loadAudit() { setAudit(await get("/audit-log?limit=100")); }
 
   if (!s) return <p style={{ padding: 40, color: "var(--muted)" }} aria-busy>Loading…</p>;
@@ -73,6 +82,27 @@ export default function Settings() {
             </div>
           </div>
         </div>
+
+        <section className="set-section" aria-labelledby="mail-h">
+          <h2 id="mail-h">Email</h2>
+          <div className="card">
+            <p style={{ fontSize: 14, marginBottom: 14 }}>
+              <b>Sending through:</b> {s.mail?.provider ?? "unknown"}{s.mail?.from ? <> · <b>from</b> {s.mail.from}</> : null}
+              {s.mail?.configured === false && <span style={{ color: "var(--flag-fg)" }}> · not set up yet</span>}
+            </p>
+            <p style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 14, maxWidth: 560 }}>This email is used for subscriber confirmations, new-post emails, reader sign-in codes and sign-in alerts. Send yourself a test to see it work: the message should arrive within a minute, and a copy should appear in the Sent folder of the sending Gmail account.</p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <label className="sr-only" htmlFor="test-to">Send the test to</label>
+              <input id="test-to" className="field" type="email" style={{ maxWidth: 320 }} placeholder={me.user.email || "you@example.com"} value={testTo} onChange={(e) => setTestTo(e.target.value)} disabled={!owner} />
+              <button className="btn btn-teal" onClick={sendTest} disabled={!owner || testing || s.mail?.configured === false}>{testing ? "Sending…" : "Send a test email"}</button>
+            </div>
+            <div aria-live="polite" role="status" style={{ marginTop: 12 }}>
+              {testState && (testState.ok
+                ? <p style={{ color: "var(--teal)", fontSize: 14 }}>✓ {testState.text}</p>
+                : <p className="err" role="alert">Could not send: {testState.text}</p>)}
+            </div>
+          </div>
+        </section>
 
         <section className="set-section" aria-labelledby="site-h">
           <h2 id="site-h">The site</h2>

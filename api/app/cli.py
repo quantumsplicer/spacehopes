@@ -317,21 +317,7 @@ async def test_email(to: str):
                              _m.wrap_html("<p>If you can read this, the <b>Space hopes</b> site can send email.</p>"))
         print("SENT. Check the inbox (and the spam folder) of", to)
     except Exception as e:  # noqa: BLE001
-        hint = ""
-        t = str(e).lower()
-        if "forbidden" in t:
-            hint = "  -> The relay rejected the secret. APPS_SCRIPT_MAIL_SECRET must equal SECRET in the Apps Script."
-        elif "bad address" in t or "refused" in t:
-            hint = "  -> The relay answered but refused the message (see the text above)."
-        elif "534" in t or "535" in t or "authentication" in t or "username and password" in t or "unexpected eof" in t or "unexpectedly closed" in t or "disconnected" in t:
-            hint = "  -> The login was refused (Gmail just hangs up on a wrong login). Use a 16-character App Password with 2-Step Verification on. NOTE: Render's free plan blocks SMTP entirely; use the Apps Script relay there."
-        elif "name or service not known" in t or "getaddrinfo" in t:
-            hint = "  -> The mail server name is wrong or unreachable."
-        elif "timed out" in t or "timeout" in t:
-            hint = "  -> The mail server did not answer (wrong port?). Use 587 with SMTP_TLS=true, or 465."
-        print(f"FAILED: {type(e).__name__}: {str(e)[:300]}")
-        if hint:
-            print(hint)
+        print("FAILED:", _m.explain(e))
         sys.exit(1)
 
 

@@ -9,11 +9,11 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import and_, cast, delete, func, or_, select, String
 
 from ..config import cfg
-from ..deps import DB, Owner, Staff, audit, get_settings
+from ..deps import DB, Owner, Staff, audit, get_settings, limiter
 from ..models import (AuditLog, Block, Comment, ContactMessage, DailyStat, Media, Post, PostDailyRead, PostTopic,
                       PostVersion, Reaction, Subscriber, Topic, now)
 from ..serializers import cards, iso, media_map, media_out
@@ -479,9 +479,40 @@ def settings_out(s) -> dict:
                                        "about_quote_confirmed", "footer_line", "social_links")}
 
 
+def mail_status() -> dict:
+    from email.utils import parseaddr
+    from ..services.mail import provider_name
+    return {"configured": cfg.mail_configured, "provider": provider_name(), "from": parseaddr(cfg.mail_from)[1] or cfg.mail_from,
+            "owner_email": cfg.owner_email}
+
+
 @router.get("/settings")
 async def get_set(a: Staff, db: DB):
-    return {**settings_out(await get_settings(db)), "mail_configured": cfg.mail_configured}
+    return {**settings_out(await get_settings(db)), "mail_configured": cfg.mail_configured, "mail": mail_status()}
+
+
+class TestMailIn(BaseModel):
+    to: EmailStr
+
+
+@router.post("/settings/test-email")
+@limiter.limit("6/minute")
+async def send_test_email(body: TestMailIn, request: Request, a: Owner, db: DB):
+    """Sends one real message and reports the real outcome (the public forms hide mail errors from visitors)."""
+    from ..services import mail
+    if not cfg.mail_configured:
+        raise HTTPException(409, "Email is not set up yet. Add a mail service first (see docs/DEPLOY-FREE.md, step 2).")
+    try:
+        await mail.mailer.send(body.to, "Test email from Space hopes", "If you can read this, the site can send email.",
+                               mail.wrap_html("<p>If you can read this, the <b>Space hopes</b> site can send email.</p>"
+                                              "<p style=\"color:#6b6b6b;font-size:14px\">Sent from Studio &gt; Settings &gt; Email.</p>"))
+    except Exception as e:  # noqa: BLE001
+        await audit(db, request, a.user.id, "email.test_failed")
+        await db.commit()
+        raise HTTPException(502, mail.explain(e))
+    await audit(db, request, a.user.id, "email.test_sent")
+    await db.commit()
+    return {"ok": True, "provider": mail.provider_name()}
 
 
 @router.put("/settings")

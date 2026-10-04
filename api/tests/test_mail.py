@@ -55,3 +55,45 @@ async def test_relay_refusal_is_reported_not_swallowed(relay, monkeypatch):
     monkeypatch.setattr(cfg, "apps_script_mail_secret", "wrong")
     with pytest.raises(RuntimeError, match="forbidden"):
         await AppsScriptMailer().send("reader@example.com", "Hello", "text")
+
+
+# ---- the Studio's "Send a test email" button --------------------------------------------------------------------
+
+class FakeMailer:
+    def __init__(self, error=None):
+        self.sent, self.error = [], error
+
+    async def send(self, to, subject, text, html=None):
+        if self.error:
+            raise self.error
+        self.sent.append((to, subject))
+
+
+async def test_studio_test_email_reports_success(owner, monkeypatch):
+    from app.services import mail
+    fake = FakeMailer()
+    monkeypatch.setattr(mail, "mailer", fake)
+    r = await owner.post("/api/v1/studio/settings/test-email", json={"to": "me@example.com"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert fake.sent == [("me@example.com", "Test email from Space hopes")]
+    st = (await owner.get("/api/v1/studio/settings")).json()["mail"]
+    assert st["configured"] is True and "provider" in st and "from" in st
+
+
+async def test_studio_test_email_explains_a_failure(owner, monkeypatch):
+    from app.services import mail
+    monkeypatch.setattr(mail, "mailer", FakeMailer(RuntimeError("mail relay refused: forbidden")))
+    r = await owner.post("/api/v1/studio/settings/test-email", json={"to": "me@example.com"})
+    assert r.status_code == 502 and "secret" in r.json()["detail"]
+
+
+async def test_studio_test_email_needs_setup_and_a_valid_address(owner, monkeypatch):
+    from app.config import Config
+    assert (await owner.post("/api/v1/studio/settings/test-email", json={"to": "not-an-email"})).status_code == 422
+    monkeypatch.setattr(Config, "mail_configured", property(lambda self: False))
+    r = await owner.post("/api/v1/studio/settings/test-email", json={"to": "me@example.com"})
+    assert r.status_code == 409 and "not set up" in r.json()["detail"]
+
+
+async def test_studio_test_email_requires_sign_in(client):
+    assert (await client.post("/api/v1/studio/settings/test-email", json={"to": "me@example.com"})).status_code == 401

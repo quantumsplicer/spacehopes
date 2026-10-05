@@ -38,7 +38,9 @@ export default function Settings() {
 
   async function sendTest() {
     setTesting(true); setTestState(null);
-    try { const r = await post("/settings/test-email", { to: testTo || me.user.email }); setTestState({ ok: true, text: `Sent through ${r.provider}. Check the inbox of ${testTo || me.user.email} (and its spam folder), and the Sent folder of the sending account.` }); }
+    try { const r = await post("/settings/test-email", { to: testTo || me.user.email }); setTestState({ ok: true, text: String(r.provider).includes("Mailpit")
+        ? "Sent to the local test inbox. Nothing is delivered to real inboxes while developing: open http://localhost:8025 to read it. Real sending is only set up on the live site."
+        : `Sent through ${r.provider}. Check the inbox of ${testTo || me.user.email} (and its spam folder), and the Sent folder of the sending account.` }); }
     catch (e: any) { setTestState({ ok: false, text: e.message }); }
     setTesting(false);
   }
@@ -89,6 +91,7 @@ export default function Settings() {
             <p style={{ fontSize: 14, marginBottom: 14 }}>
               <b>Sending through:</b> {s.mail?.provider ?? "unknown"}{s.mail?.from ? <> · <b>from</b> {s.mail.from}</> : null}
               {s.mail?.configured === false && <span style={{ color: "var(--flag-fg)" }}> · not set up yet</span>}
+              {s.mail?.provider?.includes("Mailpit") && <span style={{ color: "var(--muted)" }}> · development only: messages go to <a href="http://localhost:8025" target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>http://localhost:8025</a>, not to real inboxes</span>}
             </p>
             <p style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 14, maxWidth: 560 }}>This email is used for subscriber confirmations, new-post emails, reader sign-in codes and sign-in alerts. Send yourself a test to see it work: the message should arrive within a minute, and a copy should appear in the Sent folder of the sending Gmail account.</p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
